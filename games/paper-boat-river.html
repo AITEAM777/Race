@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b1a2b">
+<title>Paper Boat River</title>
+<style>
+  :root {
+    --ink: #f6eedb;
+    --muted: #b9c3cf;
+    --accent: #ffb347;
+    --accent-deep: #ff7a2f;
+    --bg: #0b1a2b;
+    --panel: rgba(9, 22, 38, 0.72);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    overflow: hidden;
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+  canvas { display: block; position: fixed; inset: 0; }
+
+  #hud {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; align-items: flex-start; justify-content: space-between;
+    padding: max(10px, env(safe-area-inset-top)) 14px 0 14px;
+    pointer-events: none;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+  }
+  #hud.hidden { visibility: hidden; }
+  .stats { display: flex; gap: 18px; }
+  .stat { display: flex; flex-direction: column; line-height: 1.1; }
+  .stat .label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+  .stat .value { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .stat.lantern .value { color: var(--accent); }
+  .controls { display: flex; gap: 8px; pointer-events: auto; }
+  .icon-btn {
+    width: 40px; height: 40px; border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.18);
+    background: rgba(9, 22, 38, 0.55);
+    color: var(--ink); font-size: 16px; font-weight: 800;
+    cursor: pointer; display: grid; place-items: center;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  }
+  .icon-btn:hover { background: rgba(30, 50, 75, 0.7); }
+  .icon-btn svg { width: 18px; height: 18px; fill: currentColor; }
+
+  .screen {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+    background: radial-gradient(ellipse at center, rgba(8,18,32,0.35) 0%, rgba(4,10,20,0.78) 75%);
+  }
+  .screen.hidden { display: none; }
+  .card {
+    width: 100%; max-width: 420px;
+    background: var(--panel);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 22px;
+    padding: 28px 24px 24px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  .boat-icon { width: 76px; height: 50px; margin: 0 auto 10px; display: block; }
+  h1 { font-size: clamp(28px, 7vw, 38px); letter-spacing: -0.01em; line-height: 1.05; }
+  h1 span { color: var(--accent); }
+  h2 { font-size: 30px; margin-bottom: 6px; }
+  .sub { color: var(--muted); margin: 10px 0 18px; font-size: 15px; line-height: 1.45; }
+  .howto {
+    display: grid; grid-template-columns: auto 1fr; gap: 8px 12px;
+    text-align: left; font-size: 14px; color: var(--ink);
+    margin: 0 auto 20px; max-width: 320px; align-items: center;
+  }
+  .keys { display: flex; gap: 4px; }
+  kbd {
+    display: inline-block; min-width: 26px; padding: 3px 7px;
+    border-radius: 6px; border: 1px solid rgba(255,255,255,0.25);
+    background: rgba(255,255,255,0.08);
+    font: 700 12px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; text-align: center;
+  }
+  .dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; margin: 0 6px; }
+  .dot.lantern { background: radial-gradient(circle, #fff3c4 0%, #ffb347 45%, #ff7a2f 100%); box-shadow: 0 0 10px #ffb347; }
+  .dot.rock { background: radial-gradient(circle at 35% 35%, #9aa3b0, #3c4452); }
+  .primary {
+    display: inline-block; width: 100%;
+    padding: 14px 20px; border: 0; border-radius: 14px;
+    background: linear-gradient(180deg, var(--accent), var(--accent-deep));
+    color: #2a1405; font-size: 18px; font-weight: 800; letter-spacing: 0.02em;
+    cursor: pointer; box-shadow: 0 8px 24px rgba(255, 122, 47, 0.35);
+    transition: transform 0.08s ease, filter 0.15s ease;
+  }
+  .primary:hover { filter: brightness(1.06); }
+  .primary:active { transform: scale(0.98); }
+  .primary:focus-visible, .icon-btn:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+  .best-line { margin-top: 14px; font-size: 13px; color: var(--muted); }
+  .best-line b { color: var(--ink); }
+  .results { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 16px 0 18px; }
+  .result { background: rgba(255,255,255,0.06); border-radius: 14px; padding: 10px 6px; }
+  .result .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); }
+  .result .value { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .badge {
+    display: inline-block; margin-top: 4px; padding: 4px 12px; border-radius: 999px;
+    background: rgba(255,179,71,0.18); color: var(--accent); font-weight: 800; font-size: 13px;
+    letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .badge.hidden { display: none; }
+  .hint { margin-top: 12px; font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="Paper Boat River game"></canvas>
+
+<div id="hud" class="hidden">
+  <div class="stats">
+    <div class="stat"><span class="label">Score</span><span class="value" id="hudScore">0</span></div>
+    <div class="stat lantern"><span class="label">Lanterns</span><span class="value" id="hudLanterns">0</span></div>
+    <div class="stat"><span class="label">Best</span><span class="value" id="hudBest">0</span></div>
+  </div>
+  <div class="controls">
+    <button class="icon-btn" id="pauseBtn" aria-label="Pause (P)" title="Pause (P)">
+      <svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+    </button>
+    <button class="icon-btn" id="muteBtn" aria-label="Toggle sound (M)" title="Toggle sound (M)"></button>
+  </div>
+</div>
+
+<div id="startScreen" class="screen">
+  <div class="card">
+    <svg class="boat-icon" viewBox="0 0 76 50" aria-hidden="true">
+      <polygon points="4,18 72,18 58,40 18,40" fill="#f6eedb"/>
+      <polygon points="38,2 38,18 18,18" fill="#ffffff"/>
+      <polygon points="38,2 58,18 38,18" fill="#d9d1bd"/>
+      <path d="M2 46 Q 12 41 22 46 T 42 46 T 62 46 T 76 46" stroke="#5aa7d6" stroke-width="3" fill="none" stroke-linecap="round"/>
+    </svg>
+    <h1>Paper Boat <span>River</span></h1>
+    <p class="sub">Drift down a moonlit river. Dodge the rocks, stay off the banks, and gather every floating lantern you can.</p>
+    <div class="howto">
+      <div class="keys"><kbd>&larr;</kbd><kbd>&rarr;</kbd></div><div>or <kbd>A</kbd> <kbd>D</kbd> to steer</div>
+      <div class="keys"><kbd>Drag</kbd></div><div>anywhere to steer on touch screens</div>
+      <div class="keys"><span class="dot lantern"></span></div><div>Lanterns: +25, chain them for a multiplier</div>
+      <div class="keys"><span class="dot rock"></span></div><div>Rocks and riverbanks sink your boat</div>
+      <div class="keys"><kbd>P</kbd><kbd>M</kbd></div><div>Pause and mute</div>
+    </div>
+    <button class="primary" id="playBtn">Set sail</button>
+    <div class="best-line">Best score: <b id="startBest">0</b></div>
+  </div>
+</div>
+
+<div id="pauseScreen" class="screen hidden">
+  <div class="card">
+    <h2>Paused</h2>
+    <p class="sub">The river will wait for you.</p>
+    <button class="primary" id="resumeBtn">Resume</button>
+    <div class="hint">Press P, Space or Esc to resume</div>
+  </div>
+</div>
+
+<div id="overScreen" class="screen hidden">
+  <div class="card">
+    <h2>Capsized!</h2>
+    <div class="badge hidden" id="newBest">New best score</div>
+    <div class="results">
+      <div class="result"><div class="label">Score</div><div class="value" id="overScore">0</div></div>
+      <div class="result"><div class="label">Lanterns</div><div class="value" id="overLanterns">0</div></div>
+      <div class="result"><div class="label">Best</div><div class="value" id="overBest">0</div></div>
+    </div>
+    <button class="primary" id="restartBtn">Sail again</button>
+    <div class="hint">Press Space or Enter to restart</div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- Canvas and coordinate system ----------
+  // The game uses a logical height of 800 units; width adapts to the screen aspect ratio.
+  const cv = document.getElementById('game');
+  const ctx = cv.getContext('2d');
+  const LH = 800;
+  const BOAT_Y = 620;
+  let W = 600;
+  let scale = 1;
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = window.innerWidth, h = window.innerHeight;
+    cv.style.width = w + 'px';
+    cv.style.height = h + 'px';
+    cv.width = Math.max(1, Math.round(w * dpr));
+    cv.height = Math.max(1, Math.round(h * dpr));
+    scale = cv.height / LH;
+    W = cv.width / scale;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---------- Helpers ----------
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const hash = (n) => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+
+  // ---------- Storage ----------
+  const BEST_KEY = 'paperBoatRiver.best';
+  const MUTE_KEY = 'paperBoatRiver.muted';
+  function loadNum(key) { try { return Number(localStorage.getItem(key)) || 0; } catch (e) { return 0; } }
+  function saveVal(key, v) { try { localStorage.setItem(key, String(v)); } catch (e) { /* storage unavailable */ } }
+  let best = loadNum(BEST_KEY);
+  let muted = loadNum(MUTE_KEY) === 1;
+
+  // ---------- Audio (Web Audio API, all sounds synthesized) ----------
+  let ac = null, master = null, ambGain = null, noiseBuf = null;
+
+  function initAudio() {
+    if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    ac = new AC();
+    master = ac.createGain();
+    master.gain.value = muted ? 0 : 0.6;
+    master.connect(ac.destination);
+
+    noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+
+    // Ambient river: looping filtered noise with a slow swell.
+    const src = ac.createBufferSource();
+    src.buffer = noiseBuf; src.loop = true;
+    const lp = ac.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 480; lp.Q.value = 0.7;
+    ambGain = ac.createGain(); ambGain.gain.value = 0;
+    src.connect(lp); lp.connect(ambGain); ambGain.connect(master);
+    src.start();
+    const lfo = ac.createOscillator(); lfo.frequency.value = 0.17;
+    const lfoGain = ac.createGain(); lfoGain.gain.value = 200;
+    lfo.connect(lfoGain); lfoGain.connect(lp.frequency); lfo.start();
+  }
+
+  function setAmbient(v) { if (ac && ambGain) ambGain.gain.setTargetAtTime(v, ac.currentTime, 0.5); }
+
+  function tone(freq, dur, type, vol, when, slideTo) {
+    if (!ac) return;
+    const t = ac.currentTime + (when || 0);
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(freq, t);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(master);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+
+  function noise(dur, vol, freq, type, when) {
+    if (!ac) return;
+    const t = ac.currentTime + (when || 0);
+    const s = ac.createBufferSource(); s.buffer = noiseBuf;
+    const f = ac.createBiquadFilter(); f.type = type || 'lowpass';
+    f.frequency.setValueAtTime(freq, t);
+    f.frequency.exponentialRampToValueAtTime(Math.max(60, freq * 0.2), t + dur);
+    const g = ac.createGain();
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(master);
+    s.start(t, Math.random()); s.stop(t + dur + 0.05);
+  }
+
+  const sfx = {
+    start() { [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, 0.25, 'triangle', 0.18, i * 0.08)); noise(0.5, 0.12, 1800, 'bandpass'); },
+    collect(chain) {
+      const base = 660 * Math.pow(2, Math.min(chain - 1, 12) / 12);
+      tone(base, 0.18, 'triangle', 0.22);
+      tone(base * 1.5, 0.3, 'sine', 0.16, 0.06);
+      tone(base * 2, 0.35, 'sine', 0.06, 0.12);
+    },
+    crash() {
+      noise(0.7, 0.55, 1200, 'lowpass');
+      noise(0.35, 0.25, 3000, 'bandpass', 0.02);
+      tone(180, 0.45, 'sawtooth', 0.18, 0, 45);
+      tone(95, 0.8, 'sine', 0.35, 0, 30);
+    },
+    level() { tone(783.99, 0.18, 'sine', 0.16); tone(1174.66, 0.35, 'sine', 0.14, 0.1); tone(1567.98, 0.4, 'sine', 0.08, 0.2); },
+    gameOver() { [392, 329.63, 261.63].forEach((f, i) => tone(f, 0.4, 'triangle', 0.16, 0.5 + i * 0.16)); }
+  };
+
+  // ---------- River geometry (functions of world distance) ----------
+  function halfW(wy) { return Math.max(60, Math.min(W / 2 - 26, Math.max(108, 195 - wy * 0.0011))); }
+  function center(wy) {
+    const hw = halfW(wy);
+    const room = Math.max(0, W / 2 - hw - 22);
+    const amp = Math.min(room, 25 + wy * 0.0045);
+    return W / 2 + amp * (0.62 * Math.sin(wy * 0.0019) + 0.38 * Math.sin(wy * 0.0043 + 1.7));
+  }
+
+  // ---------- Game state ----------
+  let state = 'menu'; // menu | playing | paused | dying | over
+  let time = 0, t = 0, dist = 0, speed = 70, bonus = 0, score = 0;
+  let lanternCount = 0, level = 1, combo = 0, comboTimer = 0;
+  let rockTimer = 0, lanternTimer = 0, wakeTimer = 0, dyingT = 0;
+  let shake = 0, flash = 0;
+  let banner = null;
+  let rocks = [], lanterns = [], parts = [], texts = [];
+  const boat = { x: 0, vx: 0, tilt: 0, sink: 0 };
+
+  const toSy = (wy) => LH - (wy - dist);
+  const toWy = (sy) => dist + LH - sy;
+
+  function reset() {
+    t = 0; dist = 0; speed = 165; bonus = 0; score = 0;
+    lanternCount = 0; level = 1; combo = 0; comboTimer = 0;
+    rockTimer = 1.2; lanternTimer = 0.8; wakeTimer = 0; dyingT = 0;
+    shake = 0; flash = 0; banner = { text: 'Level 1', life: 1.6 };
+    rocks = []; lanterns = []; parts = []; texts = [];
+    boat.x = center(toWy(BOAT_Y)); boat.vx = 0; boat.tilt = 0; boat.sink = 0;
+  }
+
+  // ---------- Spawning ----------
+  function makeRock(x, wy, r) {
+    const n = 9, pts = [];
+    for (let i = 0; i < n; i++) pts.push(r * rand(0.78, 1.08));
+    return { x, wy, r, pts, rot: rand(0, Math.PI * 2), ph: rand(0, 6) };
+  }
+
+  function clearOf(x, wy, d) {
+    for (const o of rocks) if (Math.hypot(o.x - x, o.wy - wy) < d + o.r) return false;
+    for (const l of lanterns) if (Math.hypot(l.x - x, l.wy - wy) < d) return false;
+    return true;
+  }
+
+  function spawnRock(wy, avoidX, gap) {
+    const c = center(wy), hw = halfW(wy);
+    const r = rand(13, 20 + Math.min(10, level * 1.5));
+    for (let tries = 0; tries < 10; tries++) {
+      const x = c + rand(-hw + r + 4, hw - r - 4);
+      if (avoidX !== undefined && Math.abs(x - avoidX) < gap + r) continue;
+      if (clearOf(x, wy, r + 34)) { rocks.push(makeRock(x, wy, r)); return x; }
+    }
+    return undefined;
+  }
+
+  function spawnRockGroup() {
+    const wy = toWy(-60);
+    const x1 = spawnRock(wy);
+    const pairChance = Math.min(0.5, (level - 2) * 0.12);
+    if (x1 !== undefined && level >= 3 && Math.random() < pairChance) {
+      spawnRock(wy + rand(-25, 25), x1, 120);
+    }
+  }
+
+  function spawnLanterns() {
+    const baseWy = toWy(-40);
+    const pattern = Math.random();
+    const count = pattern < 0.55 ? 1 : (pattern < 0.85 ? 3 : 5);
+    const offset = rand(-0.6, 0.6);
+    for (let i = 0; i < count; i++) {
+      const wy = baseWy + i * 48;
+      const c = center(wy), hw = halfW(wy);
+      const swing = count > 1 ? Math.sin(i * 0.9) * 0.25 : 0;
+      const x = clamp(c + (offset + swing) * hw, c - hw + 22, c + hw - 22);
+      if (clearOf(x, wy, 44)) lanterns.push({ x, wy, ph: rand(0, 6.28) });
+    }
+  }
+
+  // ---------- Effects ----------
+  function addRipple(x, wy, size) { parts.push({ type: 'ripple', x, wy, vx: 0, vwy: 0, life: 0.9, max: 0.9, size }); }
+
+  function burst(x, wy, n, colors, spd, type) {
+    for (let i = 0; i < n; i++) {
+      const a = rand(0, Math.PI * 2), v = rand(spd * 0.3, spd);
+      const life = rand(0.5, 1.0);
+      parts.push({
+        type, x, wy, vx: Math.cos(a) * v, vwy: Math.sin(a) * v,
+        life, max: life, size: rand(2, type === 'debris' ? 7 : 4),
+        color: colors[(Math.random() * colors.length) | 0],
+        rot: rand(0, 6.28), vr: rand(-8, 8)
+      });
+    }
+  }
+
+  function addText(x, wy, text, color) { texts.push({ x, wy, text, color, life: 1.0 }); }
+
+  // ---------- Events ----------
+  function collect(l) {
+    l.got = true;
+    combo = comboTimer > 0 ? combo + 1 : 1;
+    comboTimer = 2.2;
+    const mult = Math.min(5, combo);
+    const pts = 25 * mult;
+    bonus += pts;
+    lanternCount++;
+    burst(l.x, l.wy, 18, ['#ffd27a', '#ffb347', '#fff3c4'], 160, 'spark');
+    addRipple(l.x, l.wy, 1.6);
+    addText(l.x, l.wy + 20, mult > 1 ? '+' + pts + '  x' + mult : '+' + pts, '#ffd27a');
+    sfx.collect(combo);
+  }
+
+  function crash() {
+    if (state !== 'playing') return;
+    state = 'dying';
+    dyingT = 1.2;
+    shake = 14; flash = 1;
+    const wy = toWy(BOAT_Y);
+    burst(boat.x, wy, 26, ['#f6eedb', '#e3dccb', '#ffffff'], 220, 'debris');
+    burst(boat.x, wy, 14, ['#bfe3ff', '#8cc8f0'], 180, 'spark');
+    addRipple(boat.x, wy, 2.2);
+    sfx.crash();
+    if (navigator.vibrate) { try { navigator.vibrate(120); } catch (e) { /* ignore */ } }
+  }
+
+  // ---------- Input ----------
+  const keys = { left: false, right: false };
+  const pointer = { active: false, x: 0, id: null };
+
+  window.addEventListener('keydown', (e) => {
+    const k = e.key;
+    if (k === 'ArrowLeft' || k === 'a' || k === 'A') { keys.left = true; e.preventDefault(); }
+    else if (k === 'ArrowRight' || k === 'd' || k === 'D') { keys.right = true; e.preventDefault(); }
+    else if (k === ' ' || k === 'Enter') {
+      e.preventDefault();
+      if (state === 'menu' || state === 'over') startGame();
+      else if (state === 'paused') togglePause();
+    }
+    else if (k === 'p' || k === 'P' || k === 'Escape') { if (state === 'playing' || state === 'paused') togglePause(); }
+    else if (k === 'm' || k === 'M') toggleMute();
+  });
+  window.addEventListener('keyup', (e) => {
+    const k = e.key;
+    if (k === 'ArrowLeft' || k === 'a' || k === 'A') keys.left = false;
+    else if (k === 'ArrowRight' || k === 'd' || k === 'D') keys.right = false;
+  });
+
+  function pointerToLogicalX(clientX) { return clientX * (cv.width / window.innerWidth) / scale; }
+
+  cv.addEventListener('pointerdown', (e) => {
+    if (state !== 'playing') return;
+    pointer.active = true; pointer.id = e.pointerId; pointer.x = pointerToLogicalX(e.clientX);
+    try { cv.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    e.preventDefault();
+  });
+  cv.addEventListener('pointermove', (e) => {
+    if (pointer.active && e.pointerId === pointer.id) pointer.x = pointerToLogicalX(e.clientX);
+  });
+  const endPointer = (e) => { if (e.pointerId === pointer.id) { pointer.active = false; pointer.id = null; } };
+  cv.addEventListener('pointerup', endPointer);
+  cv.addEventListener('pointercancel', endPointer);
+  window.addEventListener('blur', () => { keys.left = keys.right = false; pointer.active = false; if (state === 'playing') togglePause(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'playing') togglePause(); });
+
+  // ---------- UI ----------
+  const $ = (id) => document.getElementById(id);
+  const hud = $('hud'), startScreen = $('startScreen'), pauseScreen = $('pauseScreen'), overScreen = $('overScreen');
+  const hudScore = $('hudScore'), hudLanterns = $('hudLanterns'), hudBest = $('hudBest');
+  const muteBtn = $('muteBtn');
+  const ICON_SOUND = '<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 8.5a5 5 0 0 1 0 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>';
+  const ICON_MUTED = '<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9l5 6M21 9l-5 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>';
+
+  function renderMuteIcon() { muteBtn.innerHTML = muted ? ICON_MUTED : ICON_SOUND; }
+  function toggleMute() {
+    muted = !muted;
+    saveVal(MUTE_KEY, muted ? 1 : 0);
+    if (ac && master) master.gain.setTargetAtTime(muted ? 0 : 0.6, ac.currentTime, 0.05);
+    renderMuteIcon();
+  }
+  renderMuteIcon();
+
+  $('startBest').textContent = best;
+  hudBest.textContent = best;
+
+  function show(el) { el.classList.remove('hidden'); }
+  function hide(el) { el.classList.add('hidden'); }
+
+  function startGame() {
+    if (state === 'playing' || state === 'dying') return;
+    initAudio();
+    reset();
+    state = 'playing';
+    hide(startScreen); hide(overScreen); hide(pauseScreen);
+    hud.classList.remove('hidden');
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    sfx.start();
+    setAmbient(0.09);
+  }
+
+  function togglePause() {
+    if (state === 'playing') {
+      state = 'paused';
+      keys.left = keys.right = false; pointer.active = false;
+      show(pauseScreen);
+      setAmbient(0.02);
+    } else if (state === 'paused') {
+      state = 'playing';
+      hide(pauseScreen);
+      initAudio();
+      setAmbient(0.09);
+      last = performance.now();
+    }
+  }
+
+  function showGameOver() {
+    state = 'over';
+    const isBest = score > best;
+    if (isBest) { best = score; saveVal(BEST_KEY, best); }
+    $('overScore').textContent = score;
+    $('overLanterns').textContent = lanternCount;
+    $('overBest').textContent = best;
+    $('newBest').classList.toggle('hidden', !isBest);
+    $('startBest').textContent = best;
+    hudBest.textContent = best;
+    show(overScreen);
+    sfx.gameOver();
+    setAmbient(0.03);
+    setTimeout(() => { if (state === 'over') $('restartBtn').focus({ preventScroll: true }); }, 50);
+  }
+
+  $('playBtn').addEventListener('click', startGame);
+  $('restartBtn').addEventListener('click', startGame);
+  $('resumeBtn').addEventListener('click', togglePause);
+  $('pauseBtn').addEventListener('click', () => { if (state === 'playing' || state === 'paused') togglePause(); });
+  muteBtn.addEventListener('click', () => { initAudio(); toggleMute(); });
+
+  // ---------- Update ----------
+  const MAXV = 430;
+
+  function updateBoat(dt) {
+    const dir = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+    if (pointer.active) {
+      const target = clamp((pointer.x - boat.x) * 7, -MAXV, MAXV);
+      boat.vx += (target - boat.vx) * Math.min(1, dt * 12);
+    } else if (dir !== 0) {
+      boat.vx = clamp(boat.vx + dir * 2400 * dt, -MAXV, MAXV);
+    } else {
+      boat.vx *= Math.pow(0.004, dt);
+    }
+    boat.x += boat.vx * dt;
+    boat.tilt = lerp(boat.tilt, (boat.vx / MAXV) * 0.38, Math.min(1, dt * 10));
+  }
+
+  function spawnWake(dt) {
+    wakeTimer -= dt;
+    if (wakeTimer <= 0) {
+      wakeTimer = 0.05;
+      addRipple(boat.x + rand(-3, 3), toWy(BOAT_Y + 20), 1);
+    }
+  }
+
+  function update(dt) {
+    time += dt;
+
+    if (state === 'menu' || state === 'over') {
+      dist += 70 * dt;
+      const c = center(toWy(BOAT_Y));
+      boat.x = lerp(boat.x || c, c, Math.min(1, dt * 2.5));
+      boat.tilt = lerp(boat.tilt, Math.sin(time * 0.8) * 0.06, dt * 3);
+      if (state === 'menu') { boat.sink = 0; spawnWake(dt); }
+    } else if (state === 'playing') {
+      t += dt;
+      speed = Math.min(480, 165 + t * 5);
+      const newLevel = 1 + Math.floor(t / 15);
+      if (newLevel > level) {
+        level = newLevel;
+        banner = { text: 'Level ' + level, life: 1.8 };
+        sfx.level();
+      }
+      dist += speed * dt;
+      updateBoat(dt);
+      spawnWake(dt);
+
+      rockTimer -= dt;
+      if (rockTimer <= 0) {
+        spawnRockGroup();
+        rockTimer = Math.max(0.3, 1.05 - t * 0.011) * rand(0.75, 1.25);
+      }
+      lanternTimer -= dt;
+      if (lanternTimer <= 0) { spawnLanterns(); lanternTimer = rand(1.3, 2.4); }
+      if (comboTimer > 0) { comboTimer -= dt; if (comboTimer <= 0) combo = 0; }
+
+      // Bank collision
+      const bwy = toWy(BOAT_Y);
+      const c = center(bwy), hw = halfW(bwy);
+      if (boat.x - 10 < c - hw || boat.x + 10 > c + hw) crash();
+
+      // Rock collision (boat approximated by two circles)
+      if (state === 'playing') {
+        for (const r of rocks) {
+          const sy = toSy(r.wy);
+          if (Math.abs(sy - BOAT_Y) > 70) continue;
+          const rr = r.r * 0.86;
+          if (Math.hypot(r.x - boat.x, sy - (BOAT_Y - 9)) < rr + 8 ||
+              Math.hypot(r.x - boat.x, sy - (BOAT_Y + 7)) < rr + 10) { crash(); break; }
+        }
+      }
+
+      // Lantern pickup
+      if (state === 'playing') {
+        for (const l of lanterns) {
+          if (l.got) continue;
+          const sy = toSy(l.wy);
+          if (Math.hypot(l.x - boat.x, sy - BOAT_Y) < 28) collect(l);
+        }
+      }
+      score = Math.floor(dist / 10) + bonus;
+    } else if (state === 'dying') {
+      dyingT -= dt;
+      speed *= Math.pow(0.12, dt);
+      dist += speed * dt;
+      boat.sink = Math.min(1, boat.sink + dt * 1.1);
+      boat.vx *= Math.pow(0.05, dt);
+      boat.x += boat.vx * dt;
+      if (dyingT <= 0) showGameOver();
+    }
+
+    if (state !== 'paused') {
+      // Cleanup objects that scrolled off the bottom
+      rocks = rocks.filter((r) => toSy(r.wy) < LH + 80);
+      lanterns = lanterns.filter((l) => !l.got && toSy(l.wy) < LH + 60);
+
+      for (const p of parts) {
+        p.life -= dt;
+        p.x += p.vx * dt; p.wy += p.vwy * dt;
+        const drag = Math.pow(0.08, dt);
+        p.vx *= drag; p.vwy *= drag;
+        if (p.rot !== undefined) p.rot += p.vr * dt;
+      }
+      parts = parts.filter((p) => p.life > 0 && toSy(p.wy) < LH + 50);
+      for (const tx of texts) { tx.life -= dt; tx.wy += 50 * dt; }
+      texts = texts.filter((tx) => tx.life > 0);
+
+      shake = Math.max(0, shake - dt * 30);
+      flash = Math.max(0, flash - dt * 2.5);
+      if (banner) { banner.life -= dt; if (banner.life <= 0) banner = null; }
+    }
+  }
+
+  // ---------- Rendering ----------
+  function drawWater() {
+    const g = ctx.createLinearGradient(0, 0, 0, LH);
+    g.addColorStop(0, '#0c2840');
+    g.addColorStop(1, '#14405f');
+    ctx.fillStyle = g;
+    ctx.fillRect(-30, -30, W + 60, LH + 60);
+
+    // Moon reflection shimmer
+    const mx = center(toWy(180));
+    const mg = ctx.createRadialGradient(mx, 180, 0, mx, 180, 140);
+    mg.addColorStop(0, 'rgba(200,225,255,0.10)');
+    mg.addColorStop(1, 'rgba(200,225,255,0)');
+    ctx.fillStyle = mg;
+    ctx.fillRect(mx - 140, 40, 280, 280);
+
+    // Current streaks: they drift slower than the banks, which sells the flow of the water.
+    const wd = dist * 0.35, gap = 30;
+    ctx.lineCap = 'round';
+    for (let i = Math.floor(wd / gap) - 1; i < (wd + LH + 60) / gap; i++) {
+      const sy = LH - (i * gap - wd);
+      const wy = toWy(sy);
+      const c = center(wy), hw = halfW(wy);
+      const h1 = hash(i), h2 = hash(i * 3.17 + 5);
+      const x = c + (h1 * 2 - 1) * hw * 0.85;
+      const len = 12 + h2 * 34;
+      ctx.strokeStyle = 'rgba(170,215,255,' + (0.05 + h2 * 0.09).toFixed(3) + ')';
+      ctx.lineWidth = 1.5 + h1 * 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x, sy);
+      ctx.quadraticCurveTo(x + Math.sin(time * 2 + i) * 3, sy + len * 0.5, x, sy + len);
+      ctx.stroke();
+    }
+  }
+
+  function drawBanks() {
+    const step = 10, L = [], R = [];
+    for (let s = -30; s <= LH + 30; s += step) {
+      const wy = toWy(s), c = center(wy), hw = halfW(wy);
+      L.push([c - hw, s]); R.push([c + hw, s]);
+    }
+    // Land
+    ctx.fillStyle = '#10301f';
+    ctx.beginPath(); ctx.moveTo(-40, -30);
+    for (const p of L) ctx.lineTo(p[0], p[1]);
+    ctx.lineTo(-40, LH + 30); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(W + 40, -30);
+    for (const p of R) ctx.lineTo(p[0], p[1]);
+    ctx.lineTo(W + 40, LH + 30); ctx.closePath(); ctx.fill();
+
+    // Muddy edge and foam line
+    const edge = (pts, off, color, width) => {
+      ctx.strokeStyle = color; ctx.lineWidth = width; ctx.beginPath();
+      pts.forEach((p, i) => (i ? ctx.lineTo(p[0] + off, p[1]) : ctx.moveTo(p[0] + off, p[1])));
+      ctx.stroke();
+    };
+    ctx.lineJoin = 'round';
+    edge(L, -3, '#4d4128', 7); edge(R, 3, '#4d4128', 7);
+    edge(L, 3, 'rgba(210,235,255,0.20)', 2); edge(R, -3, 'rgba(210,235,255,0.20)', 2);
+
+    // Trees, reeds and fireflies, placed deterministically along the world.
+    const rowGap = 58;
+    const startRow = Math.floor(toWy(LH + 60) / rowGap), endRow = Math.ceil(toWy(-60) / rowGap);
+    for (let i = startRow; i <= endRow; i++) {
+      const wy = i * rowGap, sy = toSy(wy);
+      const c = center(wy), hw = halfW(wy);
+      for (const side of [-1, 1]) {
+        const h1 = hash(i * 7.31 + side * 3.1), h2 = hash(i * 1.77 + side * 9.2), h3 = hash(i * 4.13 + side);
+        const edgeX = c + side * hw;
+        const space = side < 0 ? edgeX : W - edgeX;
+        // Reeds right at the edge
+        if (h3 > 0.5) {
+          ctx.strokeStyle = '#2f5a35'; ctx.lineWidth = 2;
+          for (let k = 0; k < 4; k++) {
+            const rx = edgeX + side * (6 + k * 3), ry = sy + (k - 2) * 4;
+            ctx.beginPath(); ctx.moveTo(rx, ry);
+            ctx.lineTo(rx + side * 6 + Math.sin(time * 2 + k + i) * 2, ry - 10); ctx.stroke();
+          }
+        }
+        if (h1 < 0.4 || space < 40) continue;
+        const x = edgeX + side * (28 + h2 * Math.max(0, space - 50));
+        const size = 14 + h3 * 16;
+        ctx.fillStyle = 'rgba(0,0,0,0.30)';
+        ctx.beginPath(); ctx.arc(x + 6, sy + 7, size, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#0d2616';
+        ctx.beginPath(); ctx.arc(x, sy, size, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#18412a';
+        ctx.beginPath(); ctx.arc(x - size * 0.25, sy - size * 0.2, size * 0.62, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#22553a';
+        ctx.beginPath(); ctx.arc(x - size * 0.38, sy - size * 0.35, size * 0.3, 0, Math.PI * 2); ctx.fill();
+        // Firefly
+        if (h2 > 0.6) {
+          const a = 0.5 + 0.5 * Math.sin(time * 3 + i * 2.1 + side);
+          const fx = x + Math.sin(time * 0.9 + i) * size, fy = sy + Math.cos(time * 1.1 + i) * size * 0.8;
+          ctx.fillStyle = 'rgba(255,240,150,' + (a * 0.9).toFixed(3) + ')';
+          ctx.beginPath(); ctx.arc(fx, fy, 1.8, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+    }
+  }
+
+  function rockPath(r, ox, oy) {
+    const n = r.pts.length;
+    ctx.beginPath();
+    for (let i = 0; i <= n; i++) {
+      const a = r.rot + (i / n) * Math.PI * 2, rr = r.pts[i % n];
+      const x = ox + Math.cos(a) * rr, y = oy + Math.sin(a) * rr;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.closePath();
+  }
+
+  function drawRocks() {
+    for (const r of rocks) {
+      const sy = toSy(r.wy);
+      if (sy < -60 || sy > LH + 60) continue;
+      // Foam ring
+      ctx.strokeStyle = 'rgba(210,235,255,' + (0.16 + 0.1 * Math.sin(time * 4 + r.ph)).toFixed(3) + ')';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(r.x, sy, r.r * 1.3, r.r * 1.2, 0, 0, Math.PI * 2); ctx.stroke();
+      // Shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.32)';
+      rockPath(r, r.x + 4, sy + 5); ctx.fill();
+      // Body
+      const g = ctx.createRadialGradient(r.x - r.r * 0.35, sy - r.r * 0.35, r.r * 0.1, r.x, sy, r.r * 1.1);
+      g.addColorStop(0, '#9aa3b0'); g.addColorStop(1, '#3a4250');
+      ctx.fillStyle = g;
+      rockPath(r, r.x, sy); ctx.fill();
+      ctx.strokeStyle = '#262c36'; ctx.lineWidth = 1.5; ctx.stroke();
+    }
+  }
+
+  function drawLanterns() {
+    ctx.globalCompositeOperation = 'lighter';
+    for (const l of lanterns) {
+      const sy = toSy(l.wy) + Math.sin(time * 2.5 + l.ph) * 2.5;
+      if (sy < -60 || sy > LH + 60) continue;
+      const pulse = 0.85 + 0.15 * Math.sin(time * 5 + l.ph);
+      const g = ctx.createRadialGradient(l.x, sy, 0, l.x, sy, 46);
+      g.addColorStop(0, 'rgba(255,180,80,' + (0.45 * pulse).toFixed(3) + ')');
+      g.addColorStop(1, 'rgba(255,120,40,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(l.x, sy, 46, 0, Math.PI * 2); ctx.fill();
+      // Reflection on the water
+      ctx.fillStyle = 'rgba(255,170,70,' + (0.18 * pulse).toFixed(3) + ')';
+      ctx.beginPath(); ctx.ellipse(l.x, sy + 14, 7, 16, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    for (const l of lanterns) {
+      const sy = toSy(l.wy) + Math.sin(time * 2.5 + l.ph) * 2.5;
+      if (sy < -60 || sy > LH + 60) continue;
+      // Little floating base
+      ctx.fillStyle = '#5a3a1e';
+      ctx.beginPath(); ctx.ellipse(l.x, sy + 8, 11, 4, 0, 0, Math.PI * 2); ctx.fill();
+      // Paper body
+      const g = ctx.createLinearGradient(l.x - 8, 0, l.x + 8, 0);
+      g.addColorStop(0, '#ffcf6b'); g.addColorStop(0.5, '#fff0c0'); g.addColorStop(1, '#ff8a3a');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(l.x - 8, sy - 11, 16, 19, 5); else ctx.rect(l.x - 8, sy - 11, 16, 19);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(160,70,20,0.6)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(l.x - 8, sy - 3); ctx.lineTo(l.x + 8, sy - 3); ctx.moveTo(l.x - 8, sy + 3); ctx.lineTo(l.x + 8, sy + 3); ctx.stroke();
+      ctx.fillStyle = '#3a2210';
+      ctx.fillRect(l.x - 6, sy - 14, 12, 4);
+    }
+  }
+
+  function drawBoat() {
+    if (boat.sink >= 1) return;
+    const y = BOAT_Y + Math.sin(time * 3) * 1.5;
+    const s = 1 - boat.sink * 0.45;
+    ctx.save();
+    ctx.globalAlpha = 1 - boat.sink;
+    ctx.translate(boat.x, y);
+    ctx.rotate(boat.tilt + boat.sink * 1.6);
+    ctx.scale(s, s);
+
+    const hull = [[0, -27], [11, -11], [11, 13], [0, 21], [-11, 13], [-11, -11]];
+    const poly = (pts, ox, oy) => {
+      ctx.beginPath();
+      pts.forEach((p, i) => (i ? ctx.lineTo(p[0] + ox, p[1] + oy) : ctx.moveTo(p[0] + ox, p[1] + oy)));
+      ctx.closePath();
+    };
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.30)';
+    poly(hull, 4, 6); ctx.fill();
+    // Left half (lit) and right half (shaded) of the folded hull
+    ctx.fillStyle = '#fbf7ec';
+    poly([[0, -27], [-11, -11], [-11, 13], [0, 21]], 0, 0); ctx.fill();
+    ctx.fillStyle = '#ddd5c2';
+    poly([[0, -27], [11, -11], [11, 13], [0, 21]], 0, 0); ctx.fill();
+    ctx.strokeStyle = '#a9a08a'; ctx.lineWidth = 1.2;
+    poly(hull, 0, 0); ctx.stroke();
+    // Fold lines
+    ctx.strokeStyle = 'rgba(150,140,115,0.55)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-11, -11); ctx.lineTo(0, -4); ctx.lineTo(11, -11); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-11, 13); ctx.lineTo(0, 8); ctx.lineTo(11, 13); ctx.stroke();
+    // Central sail ridge
+    ctx.fillStyle = '#ffffff';
+    poly([[0, -16], [5, 9], [-5, 9]], 0, 0); ctx.fill();
+    ctx.fillStyle = '#e8e1cf';
+    poly([[0, -16], [5, 9], [0, 9]], 0, 0); ctx.fill();
+    ctx.strokeStyle = '#bdb39c';
+    ctx.beginPath(); ctx.moveTo(0, -16); ctx.lineTo(0, 9); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawParticles() {
+    for (const p of parts) {
+      const sy = toSy(p.wy);
+      const a = Math.max(0, p.life / p.max);
+      if (p.type === 'ripple') {
+        const k = 1 - a;
+        ctx.strokeStyle = 'rgba(200,230,255,' + (a * 0.35).toFixed(3) + ')';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.ellipse(p.x, sy, (6 + k * 22) * p.size, (3 + k * 10) * p.size, 0, 0, Math.PI * 2); ctx.stroke();
+      } else if (p.type === 'spark') {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = p.color; ctx.globalAlpha = a;
+        ctx.beginPath(); ctx.arc(p.x, sy, p.size * (0.5 + a * 0.5), 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+      } else {
+        ctx.save();
+        ctx.globalAlpha = a; ctx.fillStyle = p.color;
+        ctx.translate(p.x, sy); ctx.rotate(p.rot);
+        ctx.beginPath(); ctx.moveTo(-p.size, -p.size * 0.6); ctx.lineTo(p.size, 0); ctx.lineTo(-p.size * 0.4, p.size * 0.8); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+    }
+  }
+
+  function drawTexts() {
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '800 20px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+    for (const tx of texts) {
+      ctx.globalAlpha = Math.min(1, tx.life * 2);
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillText(tx.text, tx.x + 1, toSy(tx.wy) + 2);
+      ctx.fillStyle = tx.color;
+      ctx.fillText(tx.text, tx.x, toSy(tx.wy));
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawOverlay() {
+    // Vignette
+    const g = ctx.createRadialGradient(W / 2, LH / 2, LH * 0.3, W / 2, LH / 2, Math.max(W, LH) * 0.75);
+    g.addColorStop(0, 'rgba(0,0,10,0)');
+    g.addColorStop(1, 'rgba(0,0,10,0.55)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, LH);
+
+    if (flash > 0) {
+      ctx.fillStyle = 'rgba(255,90,60,' + (flash * 0.3).toFixed(3) + ')';
+      ctx.fillRect(0, 0, W, LH);
+    }
+
+    if (banner && state === 'playing') {
+      const a = Math.min(1, banner.life * 1.5);
+      ctx.globalAlpha = a;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = '800 38px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillText(banner.text, W / 2 + 2, 262);
+      ctx.fillStyle = '#f6eedb';
+      ctx.fillText(banner.text, W / 2, 260);
+      if (level > 1) {
+        ctx.font = '600 16px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+        ctx.fillStyle = '#ffb347';
+        ctx.fillText('The current grows stronger', W / 2, 296);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    if (state === 'playing' && combo > 1 && comboTimer > 0) {
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = '800 18px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+      ctx.globalAlpha = Math.min(1, comboTimer);
+      ctx.fillStyle = '#ffd27a';
+      ctx.fillText('Lantern chain x' + Math.min(5, combo), W / 2, LH - 60);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function render() {
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.save();
+    if (shake > 0) ctx.translate((Math.random() * 2 - 1) * shake, (Math.random() * 2 - 1) * shake);
+    drawWater();
+    drawRocks();
+    drawBanks();
+    drawLanterns();
+    drawParticles();
+    drawBoat();
+    drawTexts();
+    ctx.restore();
+    drawOverlay();
+  }
+
+  // ---------- HUD ----------
+  let shownScore = -1, shownLanterns = -1;
+  function updateHud() {
+    if (score !== shownScore) { hudScore.textContent = score; shownScore = score; }
+    if (lanternCount !== shownLanterns) { hudLanterns.textContent = lanternCount; shownLanterns = lanternCount; }
+  }
+
+  // ---------- Main loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+    last = now;
+    update(dt);
+    render();
+    updateHud();
+    requestAnimationFrame(frame);
+  }
+  boat.x = center(toWy(BOAT_Y));
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
